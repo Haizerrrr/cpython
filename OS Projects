@@ -1,0 +1,148 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# Define Scheduling Algorithms
+def round_robin(processes, burst_time, arrival_time, quantum):
+    n = len(processes)
+    remaining_bt = burst_time[:]
+    completion_time = [0] * n
+    waiting_time = [0] * n
+    turnaround_time = [0] * n
+    gantt_chart = []
+
+    time = 0
+    queue = [i for i in range(n) if arrival_time[i] <= time]
+    visited = set(queue)
+
+    while queue:
+        i = queue.pop(0)
+        gantt_chart.append((processes[i], time))
+
+        if remaining_bt[i] > quantum:
+            time += quantum
+            remaining_bt[i] -= quantum
+        else:
+            time += remaining_bt[i]
+            remaining_bt[i] = 0
+            completion_time[i] = time
+
+        for j in range(n):
+            if arrival_time[j] <= time and j not in visited:
+                queue.append(j)
+                visited.add(j)
+
+        if remaining_bt[i] > 0:
+            queue.append(i)
+
+    for i in range(n):
+        turnaround_time[i] = completion_time[i] - arrival_time[i]
+        waiting_time[i] = turnaround_time[i] - burst_time[i]
+
+    return waiting_time, turnaround_time, completion_time, gantt_chart
+
+# Define UI Functions
+def add_process():
+    try:
+        process_name = f"P{len(process_list) + 1}"
+        burst = int(burst_time_entry.get())
+        arrival = int(arrival_time_entry.get())
+        priority = int(priority_entry.get())
+        process_list.append((process_name, burst, arrival, priority))
+        update_process_table()
+        burst_time_entry.delete(0, tk.END)
+        arrival_time_entry.delete(0, tk.END)
+        priority_entry.delete(0, tk.END)
+    except ValueError:
+        messagebox.showerror("Input Error", "Please enter valid numeric values.")
+
+def update_process_table():
+    for row in process_table.get_children():
+        process_table.delete(row)
+    for i, process in enumerate(process_list):
+        process_table.insert("", "end", values=(process[0], process[1], process[2], process[3]))
+
+def run_simulation():
+    global process_list
+    if len(process_list) < 3:
+        messagebox.showerror("Input Error", "At least 3 processes are required.")
+        return
+
+    processes = [p[0] for p in process_list]
+    burst_time = [p[1] for p in process_list]
+    arrival_time = [p[2] for p in process_list]
+    priority = [p[3] for p in process_list]
+
+    # Round Robin Simulation
+    quantum = 3
+    wt_rr, tat_rr, ct_rr, gc_rr = round_robin(processes, burst_time, arrival_time, quantum)
+    display_results("Round Robin", processes, wt_rr, tat_rr, ct_rr, gc_rr)
+
+def display_results(algorithm, processes, wt, tat, ct, gc):
+    result_window = tk.Toplevel()
+    result_window.title(f"{algorithm} Results")
+    result_window.geometry("600x400")
+
+    ttk.Label(result_window, text=f"Results for {algorithm}", font=("Arial", 14)).pack(pady=10)
+    result_table = ttk.Treeview(result_window, columns=("Process", "WT", "TAT", "CT"), show="headings")
+    result_table.heading("Process", text="Process")
+    result_table.heading("WT", text="Waiting Time")
+    result_table.heading("TAT", text="Turnaround Time")
+    result_table.heading("CT", text="Completion Time")
+    result_table.pack(fill=tk.BOTH, expand=True, pady=10)
+
+    for i, process in enumerate(processes):
+        result_table.insert("", "end", values=(process, wt[i], tat[i], ct[i]))
+
+    # Display Gantt Chart
+    fig = Figure(figsize=(6, 2), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.set_title(f"{algorithm} Gantt Chart")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Processes")
+    gantt_x = [g[1] for g in gc]
+    gantt_y = [g[0] for g in gc]
+    ax.barh(gantt_y, [quantum] * len(gc), left=gantt_x, color="skyblue")
+    canvas = FigureCanvasTkAgg(fig, result_window)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+# Initialize Main Application
+root = tk.Tk()
+root.title("CPU Scheduling Simulation")
+root.geometry("800x600")
+
+process_list = []
+
+# Input Section
+input_frame = ttk.Frame(root)
+input_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+
+ttk.Label(input_frame, text="Burst Time").grid(row=0, column=0, padx=5, pady=5)
+burst_time_entry = ttk.Entry(input_frame)
+burst_time_entry.grid(row=0, column=1, padx=5, pady=5)
+
+ttk.Label(input_frame, text="Arrival Time").grid(row=0, column=2, padx=5, pady=5)
+arrival_time_entry = ttk.Entry(input_frame)
+arrival_time_entry.grid(row=0, column=3, padx=5, pady=5)
+
+ttk.Label(input_frame, text="Priority").grid(row=0, column=4, padx=5, pady=5)
+priority_entry = ttk.Entry(input_frame)
+priority_entry.grid(row=0, column=5, padx=5, pady=5)
+
+add_button = ttk.Button(input_frame, text="Add Process", command=add_process)
+add_button.grid(row=0, column=6, padx=5, pady=5)
+
+# Process Table
+process_table = ttk.Treeview(root, columns=("Process", "Burst Time", "Arrival Time", "Priority"), show="headings")
+process_table.heading("Process", text="Process")
+process_table.heading("Burst Time", text="Burst Time")
+process_table.heading("Arrival Time", text="Arrival Time")
+process_table.heading("Priority", text="Priority")
+process_table.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+# Simulation Button
+run_button = ttk.Button(root, text="Run Simulation", command=run_simulation)
+run_button.pack(side=tk.BOTTOM, padx=10, pady=10)
+
+root.mainloop()
